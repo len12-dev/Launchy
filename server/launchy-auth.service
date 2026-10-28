@@ -1,0 +1,22 @@
+[Unit]
+Description=Launchy auth (comptes cracks)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=launchy
+Group=launchy
+WorkingDirectory=/opt/launchy-auth
+ExecStart=/usr/bin/python3 /opt/launchy-auth/launchy_auth.py
+Environment=LAUNCHY_AUTH_HOST=127.0.0.1
+Environment=LAUNCHY_AUTH_PORT=8090
+Environment=LAUNCHY_AUTH_DB=/var/lib/launchy-auth/accounts.db
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+StateDirectory=launchy-auth
+
+[Install]
+WantedBy=multi-user.target
