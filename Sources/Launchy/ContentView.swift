@@ -35,7 +35,7 @@ struct ContentView: View {
             case .home: HomeView()
             case .mods: PlaceholderView(title: "Mods", systemImage: "shippingbox")
             case .skins: PlaceholderView(title: "Skins", systemImage: "person.crop.square")
-            case .account: PlaceholderView(title: "Compte", systemImage: "person.circle")
+            case .account: AccountView()
             case .settings: PlaceholderView(title: "Réglages", systemImage: "gearshape")
             }
         }
