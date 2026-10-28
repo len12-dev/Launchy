@@ -36,6 +36,7 @@ struct AuthService {
     private struct Response: Decodable {
         let username: String
         let uuid: String
+        let token: String
     }
 
     private func post(path: String, username: String, password: String, status409: AuthError) async throws -> Account {
@@ -56,7 +57,7 @@ struct AuthService {
         switch http.statusCode {
         case 200:
             let decoded = try JSONDecoder().decode(Response.self, from: data)
-            return Account(username: decoded.username, kind: .cracked, uuid: decoded.uuid)
+            return Account(username: decoded.username, kind: .cracked, uuid: decoded.uuid, token: decoded.token)
         case 401, 403:
             throw AuthError.wrongCredentials
         case 409:

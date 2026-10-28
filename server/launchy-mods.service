@@ -1,0 +1,23 @@
+[Unit]
+Description=Launchy mods API
+After=network-online.target mnt-media.mount
+Wants=network-online.target
+
+[Service]
+User=launchy-mods
+Group=launchy-mods
+WorkingDirectory=/opt/launchy-mods
+EnvironmentFile=/etc/launchy-mods.env
+ExecStart=/usr/bin/python3 /opt/launchy-mods/launchy_mods.py
+Environment=LAUNCHY_MODS_HOST=127.0.0.1
+Environment=LAUNCHY_MODS_PORT=8092
+Environment=LAUNCHY_MODS_DIR=/mnt/media/Launchy/Ultra/mods
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/mnt/media/Launchy/Ultra/mods
+
+[Install]
+WantedBy=multi-user.target

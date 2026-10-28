@@ -2,7 +2,6 @@ import SwiftUI
 
 enum AppSection: String, CaseIterable, Identifiable {
     case home = "Accueil"
-    case mods = "Mods"
     case skins = "Skins"
     case account = "Compte"
     case settings = "Réglages"
@@ -12,7 +11,6 @@ enum AppSection: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .home: "house"
-        case .mods: "shippingbox"
         case .skins: "person.crop.square"
         case .account: "person.circle"
         case .settings: "gearshape"
@@ -33,8 +31,7 @@ struct ContentView: View {
         } detail: {
             switch selection ?? .home {
             case .home: HomeView()
-            case .mods: PlaceholderView(title: "Mods", systemImage: "shippingbox")
-            case .skins: PlaceholderView(title: "Skins", systemImage: "person.crop.square")
+            case .skins: SkinView()
             case .account: AccountView()
             case .settings: PlaceholderView(title: "Réglages", systemImage: "gearshape")
             }

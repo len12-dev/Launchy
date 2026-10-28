@@ -14,12 +14,16 @@ struct Account: Codable, Equatable, Identifiable {
     let kind: Kind
     /// UUID renvoyé par le backend (ou Mojang pour un compte premium).
     let uuid: String
+    /// Jeton de session du backend Launchy, nécessaire pour envoyer un skin.
+    var token: String? = nil
 }
 
 enum AuthError: LocalizedError {
     case invalidUsername
     case premiumNameTaken
     case wrongCredentials
+    case sessionExpired
+    case invalidSkin
     case usernameAlreadyRegistered
     case network(String)
     case server(Int)
@@ -32,6 +36,10 @@ enum AuthError: LocalizedError {
             "Ce pseudo appartient à un compte Minecraft officiel. Connectez-vous avec le compte premium."
         case .wrongCredentials:
             "Pseudo ou mot de passe incorrect."
+        case .sessionExpired:
+            "Session expirée. Reconnectez-vous dans Compte."
+        case .invalidSkin:
+            "Skin invalide : PNG de 64×64 ou 64×32 requis."
         case .usernameAlreadyRegistered:
             "Ce pseudo est déjà enregistré. Connectez-vous avec son mot de passe."
         case .network(let message):
