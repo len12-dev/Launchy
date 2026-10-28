@@ -15,7 +15,7 @@ struct HomeView: View {
             Text("Launchy")
                 .font(.largeTitle.bold())
 
-            Text("Minecraft 1.21.1")
+            Text("Minecraft 1.21.1 · NeoForge")
                 .foregroundStyle(.secondary)
 
             Button {

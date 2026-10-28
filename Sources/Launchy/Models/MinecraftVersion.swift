@@ -49,6 +49,7 @@ struct VersionManifest: Decodable {
         }
 
         let name: String
+        let url: String?
         let downloads: LibraryDownloads?
         let rules: [Rule]?
         let natives: [String: String]?
@@ -154,4 +155,25 @@ struct RuntimeManifest: Decodable {
     }
 
     let files: [String: Entry]
+}
+
+/// Profil d'un loader (NeoForge) : hérite de la version vanilla, ajoute ses bibliothèques et arguments.
+struct LoaderVersion: Decodable {
+    let id: String
+    let mainClass: String
+    let libraries: [VersionManifest.Library]
+    let arguments: VersionManifest.Arguments?
+}
+
+/// Liste des mods publiée par le serveur Launchy.
+struct ModManifest: Decodable {
+    struct Mod: Decodable {
+        let name: String
+        let sha1: String
+        let size: Int
+        let url: URL
+    }
+
+    let version: String
+    let mods: [Mod]
 }

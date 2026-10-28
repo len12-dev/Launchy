@@ -6,6 +6,7 @@ enum DownloadError: LocalizedError {
     case checksumMismatch(URL)
     case versionNotFound(String)
     case runtimeNotFound(String)
+    case neoForgeInstallFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -17,6 +18,8 @@ enum DownloadError: LocalizedError {
             "Version \(id) introuvable chez Mojang"
         case .runtimeNotFound(let component):
             "Runtime Java « \(component) » introuvable pour ce Mac"
+        case .neoForgeInstallFailed(let log):
+            "Installation de NeoForge échouée, voir le journal : \(log)"
         }
     }
 }
