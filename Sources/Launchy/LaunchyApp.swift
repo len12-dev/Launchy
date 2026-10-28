@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct LaunchyApp: App {
     @State private var accountStore = AccountStore()
+    @State private var launcher = GameLauncher()
 
     init() {
         // Un binaire lancé par `swift run` n'est pas une app .app : il faut
@@ -16,6 +17,7 @@ struct LaunchyApp: App {
         WindowGroup {
             ContentView()
                 .environment(accountStore)
+                .environment(launcher)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .windowStyle(.hiddenTitleBar)
