@@ -5,10 +5,12 @@ Lancement : python3 launchy.py   (ou via scripts/install_linux.sh).
 """
 
 import base64
+import datetime
 import json
 import os
 import queue
 import threading
+import traceback
 import tkinter as tk
 from tkinter import ttk
 
@@ -23,6 +25,18 @@ ACCENT_HOVER = "#2f8a4c"
 DANGER = "#ed4245"
 SKIN_URL = "https://auth-launchy.neo-verse.net/skins/{name}.png"
 CONFIG_FILE = os.path.join(core.ROOT, "launchy.json")
+LOG_FILE = os.path.join(core.ROOT, "launchy.log")
+
+
+def log_error(message):
+    # Trace complète dans un fichier, pour pouvoir diagnostiquer un poste sans console (pythonw / .exe).
+    try:
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.datetime.now().isoformat(timespec='seconds')}] {message}\n")
+            f.write(traceback.format_exc() + "\n")
+    except OSError:
+        pass
 
 
 def load_config():
@@ -141,11 +155,17 @@ class LaunchyApp:
             self.avatar = None
             self.avatar_label.configure(image="", text="Aucun skin", fg=MUTED, font=("Sans", 10))
             return
-        image = tk.PhotoImage(data=base64.b64encode(data).decode())
-        # Affiche le visage (8x8 à partir de 8,8) agrandi x12 : n'utilise que la partie visible.
-        face = tk.PhotoImage(width=8, height=8)
-        face.tk.call(face, "copy", image, "-from", 8, 8, 16, 16, "-to", 0, 0)
-        self.avatar = face.zoom(12, 12)
+        try:
+            image = tk.PhotoImage(data=base64.b64encode(data).decode())
+            # Affiche le visage (8x8 à partir de 8,8) agrandi x12 : n'utilise que la partie visible.
+            face = tk.PhotoImage(width=8, height=8)
+            face.tk.call(face, "copy", image, "-from", 8, 8, 16, 16, "-to", 0, 0)
+            self.avatar = face.zoom(12, 12)
+        except tk.TclError:
+            # Skin illisible (format inattendu) : on garde le texte à la place de l'image.
+            log_error("Skin non décodable")
+            self.set_avatar(None)
+            return
         self.avatar_label.configure(image=self.avatar, text="")
 
     def play(self):
@@ -165,40 +185,52 @@ class LaunchyApp:
             self.events.put(("launching",))
             self.events.put(("started", core.launch(params, name)))
         except Exception as error:
-            self.events.put(("error", str(error)))
+            log_error("Échec de l'installation ou du lancement")
+            self.events.put(("error", f"{error}. Détails dans {LOG_FILE}"))
 
     def set_status(self, text, color=MUTED):
         self.status.configure(text=text, fg=color)
 
-    def poll(self):
-        try:
-            while True:
-                event = self.events.get_nowait()
-                kind = event[0]
-                if kind == "progress":
-                    self.progress.configure(value=event[2])
-                    self.set_status(event[1])
-                elif kind == "launching":
-                    self.set_status("Lancement de Minecraft…")
-                elif kind == "started":
-                    self.process = event[1]
-                    self.play_button.configure(text="EN JEU", bg=ACCENT)
-                    self.set_status("Minecraft est lancé. Bon jeu !", ACCENT)
-                elif kind == "error":
-                    self.busy = False
-                    self.play_button.configure(state="normal", bg=ACCENT, text="JOUER")
-                    self.set_status(event[1], DANGER)
-                elif kind == "skin":
-                    if event[1] == self.username.get().strip():
-                        self.set_avatar(event[2])
-        except queue.Empty:
-            pass
-
-        if self.process is not None and self.process.poll() is not None:
-            self.process = None
+    def handle(self, event):
+        kind = event[0]
+        if kind == "progress":
+            self.progress.configure(value=event[2])
+            self.set_status(event[1])
+        elif kind == "launching":
+            self.set_status("Lancement de Minecraft…")
+        elif kind == "started":
+            self.process = event[1]
+            self.play_button.configure(text="EN JEU", bg=ACCENT)
+            self.set_status("Minecraft est lancé. Bon jeu !", ACCENT)
+        elif kind == "error":
             self.busy = False
             self.play_button.configure(state="normal", bg=ACCENT, text="JOUER")
-            self.set_status("Minecraft s'est fermé.")
+            self.set_status(event[1], DANGER)
+        elif kind == "skin":
+            if event[1] == self.username.get().strip():
+                self.set_avatar(event[2])
+
+    def poll(self):
+        # Chaque événement est isolé : une erreur d'affichage ne doit pas arrêter la boucle,
+        # sinon le bouton reste bloqué.
+        while True:
+            try:
+                event = self.events.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                self.handle(event)
+            except Exception:
+                log_error(f"Erreur d'affichage pour l'événement {event[0]}")
+
+        try:
+            if self.process is not None and self.process.poll() is not None:
+                self.process = None
+                self.busy = False
+                self.play_button.configure(state="normal", bg=ACCENT, text="JOUER")
+                self.set_status("Minecraft s'est fermé.")
+        except Exception:
+            log_error("Erreur lors de la surveillance de Minecraft")
         self.root.after(100, self.poll)
 
 
