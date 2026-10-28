@@ -2,3 +2,7 @@
 .build/
 DerivedData/
 *.xcuserstate
+dist/
+build/
+*.spec
+__pycache__/

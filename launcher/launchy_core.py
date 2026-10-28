@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launchy pour Linux (Pop!_OS) : version hors ligne, sans vérification des pseudos.
+"""Logique d'installation et de lancement de Launchy (Windows, macOS, Linux).
 
 Installe Minecraft 1.21.1 + NeoForge 21.1.248, synchronise les mods depuis
 mods.neo-verse.net, puis lance le jeu directement sur ultra.neo-verse.net.
@@ -12,7 +12,6 @@ import hashlib
 import json
 import os
 import platform
-import queue
 import re
 import shutil
 import subprocess
@@ -20,8 +19,6 @@ import threading
 import urllib.request
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-import tkinter as tk
-from tkinter import ttk
 
 MC_VERSION = "1.21.1"
 NEOFORGE = "21.1.248"
@@ -35,14 +32,42 @@ RUNTIME_INDEX = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc
 VERSION_LIST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 ASSET_BASE = "https://resources.download.minecraft.net"
 LIBRARY_BASE = "https://libraries.minecraft.net/"
-ROOT = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "Launchy", "minecraft")
+# Détection de la plateforme : règles Mojang, runtime Java, chemins et séparateur du classpath.
+if platform.system() == "Windows":
+    OS_NAME = "windows"
+    RUNTIME_KEY = "windows-arm64" if platform.machine().lower() in ("arm64", "aarch64") else "windows-x64"
+    JAVA_RELATIVE = "bin/javaw.exe"
+    CLASSPATH_SEPARATOR = ";"
+    DATA_HOME = os.environ.get("APPDATA", os.path.expanduser("~"))
+elif platform.system() == "Darwin":
+    OS_NAME = "osx"
+    RUNTIME_KEY = "mac-os-arm64" if platform.machine() == "arm64" else "mac-os"
+    JAVA_RELATIVE = "jre.bundle/Contents/Home/bin/java"
+    CLASSPATH_SEPARATOR = ":"
+    DATA_HOME = os.path.expanduser("~/Library/Application Support")
+else:
+    OS_NAME = "linux"
+    RUNTIME_KEY = "linux"
+    JAVA_RELATIVE = "bin/java"
+    CLASSPATH_SEPARATOR = ":"
+    DATA_HOME = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+ROOT = os.path.join(DATA_HOME, "Launchy", "minecraft")
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,16}$")
 
 
 # --- Téléchargements -------------------------------------------------------
 
+USER_AGENT = f"Launchy/1.0 (Linux; {platform.machine()})"
+
+
+def open_url(url, timeout=60):
+    """Ouvre une URL avec un User-Agent explicite : Cloudflare refuse l'agent Python par défaut."""
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
 def get_json(url):
-    with urllib.request.urlopen(url, timeout=30) as response:
+    with open_url(url, 30) as response:
         return json.load(response)
 
 
@@ -59,7 +84,7 @@ def download(url, dest, sha1=None):
         return
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     tmp = dest + ".part"
-    with urllib.request.urlopen(url, timeout=60) as response, open(tmp, "wb") as f:
+    with open_url(url, 60) as response, open(tmp, "wb") as f:
         shutil.copyfileobj(response, f)
     if sha1 and sha1_of(tmp) != sha1:
         os.remove(tmp)
@@ -93,7 +118,7 @@ def download_all(items, report, label, low, high):
 def rule_matches(rule):
     os_rule = rule.get("os")
     if os_rule:
-        if os_rule.get("name") and os_rule["name"] != "linux":
+        if os_rule.get("name") and os_rule["name"] != OS_NAME:
             return False
         if os_rule.get("arch") == "x86":
             return False
@@ -147,7 +172,7 @@ def maven_path(name):
 
 
 def library_files(vanilla, loader):
-    """Fusionne vanilla et NeoForge (NeoForge gagne en cas de doublon) et garde ce qui concerne Linux."""
+    """Fusionne vanilla et NeoForge (NeoForge gagne en cas de doublon) et garde ce qui concerne cette plateforme."""
     chosen, order = {}, []
     for library in vanilla + loader:
         key = maven_key(library["name"])
@@ -177,7 +202,7 @@ def library_files(vanilla, loader):
 
 def install_runtime(component, destination, report):
     index = get_json(RUNTIME_INDEX)
-    manifest = get_json(index["linux"][component][0]["manifest"]["url"])["files"]
+    manifest = get_json(index[RUNTIME_KEY][component][0]["manifest"]["url"])["files"]
     files, executables, links = [], [], []
     for path, entry in manifest.items():
         target = os.path.join(destination, path)
@@ -197,7 +222,13 @@ def install_runtime(component, destination, report):
         if os.path.lexists(link):
             os.remove(link)
         os.makedirs(os.path.dirname(link), exist_ok=True)
-        os.symlink(target, link)
+        try:
+            os.symlink(target, link)
+        except OSError:
+            # Windows : les liens symboliques demandent des droits ; on copie le fichier cible.
+            source = os.path.join(os.path.dirname(link), target)
+            if os.path.exists(source):
+                shutil.copy2(source, link)
 
 
 def install_neoforge(java, report):
@@ -256,7 +287,7 @@ def prepare(report):
 
     component = vanilla.get("javaVersion", {}).get("component", "jre-legacy")
     runtime_dir = os.path.join(ROOT, "runtime", component)
-    java = os.path.join(runtime_dir, "bin", "java")
+    java = os.path.join(runtime_dir, *JAVA_RELATIVE.split("/"))
     if not os.path.exists(java):
         install_runtime(component, runtime_dir, report)
     os.chmod(java, 0o755)
@@ -322,10 +353,10 @@ def launch(params, username):
         "version_type": "release",
         "natives_directory": params["natives_dir"],
         "library_directory": params["library_root"],
-        "classpath_separator": ":",
+        "classpath_separator": CLASSPATH_SEPARATOR,
         "launcher_name": "Launchy",
         "launcher_version": "1.0",
-        "classpath": ":".join(params["classpath"]),
+        "classpath": CLASSPATH_SEPARATOR.join(params["classpath"]),
     }
     command = (
         [params["java"], "-Xms1G", "-Xmx4G"]
@@ -336,92 +367,3 @@ def launch(params, username):
     )
     log = open(os.path.join(params["game_dir"], "launchy-latest.log"), "w")
     return subprocess.Popen(command, cwd=params["game_dir"], stdout=log, stderr=subprocess.STDOUT)
-
-
-# --- Interface -------------------------------------------------------------
-
-class LaunchyApp:
-    def __init__(self, root):
-        self.root = root
-        self.events = queue.Queue()
-        self.process = None
-        self.busy = False
-
-        root.title("Launchy")
-        root.geometry("460x330")
-        root.resizable(False, False)
-
-        frame = ttk.Frame(root, padding=24)
-        frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="Launchy", font=("Sans", 26, "bold")).pack()
-        ttk.Label(frame, text=f"Minecraft {MC_VERSION} · NeoForge {NEOFORGE}").pack(pady=(0, 16))
-
-        ttk.Label(frame, text="Pseudo").pack(anchor="w")
-        self.username = tk.StringVar(value="Joueur")
-        ttk.Entry(frame, textvariable=self.username, width=30).pack(fill="x", pady=(4, 12))
-
-        self.button = ttk.Button(frame, text="Jouer", command=self.play)
-        self.button.pack(fill="x", ipady=6)
-
-        self.progress = ttk.Progressbar(frame, maximum=1.0)
-        self.progress.pack(fill="x", pady=(14, 4))
-        self.status = ttk.Label(frame, text="", wraplength=400, justify="center")
-        self.status.pack()
-
-        root.after(100, self.poll)
-
-    def play(self):
-        name = self.username.get().strip()
-        if not USERNAME_RE.match(name):
-            self.status.config(text="Pseudo invalide : 3 à 16 caractères, lettres, chiffres et _.")
-            return
-        self.busy = True
-        self.button.config(state="disabled")
-        threading.Thread(target=self.worker, args=(name,), daemon=True).start()
-
-    def worker(self, name):
-        try:
-            params = prepare(lambda label, fraction: self.events.put(("progress", label, fraction)))
-            self.events.put(("launching",))
-            self.events.put(("started", launch(params, name)))
-        except Exception as error:  # l'erreur est affichée dans la fenêtre
-            self.events.put(("error", str(error)))
-
-    def poll(self):
-        try:
-            while True:
-                event = self.events.get_nowait()
-                if event[0] == "progress":
-                    self.progress.config(value=event[2])
-                    self.status.config(text=event[1])
-                elif event[0] == "launching":
-                    self.status.config(text="Lancement de Minecraft…")
-                elif event[0] == "started":
-                    self.process = event[1]
-                    self.button.config(text="En jeu")
-                    self.status.config(text="Minecraft est lancé.")
-                elif event[0] == "error":
-                    self.busy = False
-                    self.button.config(state="normal")
-                    self.status.config(text=event[1])
-        except queue.Empty:
-            pass
-
-        if self.process is not None and self.process.poll() is not None:
-            self.process = None
-            self.busy = False
-            self.button.config(text="Jouer", state="normal")
-            self.status.config(text="Minecraft s'est fermé.")
-        self.root.after(100, self.poll)
-
-
-def main():
-    if platform.system() != "Linux":
-        print("Cette version est prévue pour Linux (Pop!_OS).")
-    root = tk.Tk()
-    LaunchyApp(root)
-    root.mainloop()
-
-
-if __name__ == "__main__":
-    main()
