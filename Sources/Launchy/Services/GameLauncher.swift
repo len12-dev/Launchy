@@ -58,7 +58,7 @@ final class GameLauncher {
             "classpath_separator": ":",
             "launcher_name": "Launchy",
             "launcher_version": "1.0",
-            "classpath": (files.classpath + [files.clientJar.path]).joined(separator: ":"),
+            "classpath": files.classpath.joined(separator: ":"),
         ]
 
         let jvmArguments = ["-Xms1G", "-Xmx4G"] + resolve(files.jvmArguments, values)
