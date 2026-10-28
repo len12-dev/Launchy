@@ -3,7 +3,7 @@ import Foundation
 /// Installe Minecraft vanilla et NeoForge dans le dossier de Launchy, comme le fait le launcher officiel.
 enum MinecraftInstaller {
     static let minecraftVersion = "1.21.1"
-    static let neoForgeVersion = "21.1.265"
+    static let neoForgeVersion = "21.1.248"
     static let loaderID = "neoforge-\(neoForgeVersion)"
 
     /// Index des runtimes Java de Mojang, utilisé par le launcher officiel.
