@@ -33,6 +33,8 @@ HOST = os.environ.get("LAUNCHY_AUTH_HOST", "127.0.0.1")
 PORT = int(os.environ.get("LAUNCHY_AUTH_PORT", "8090"))
 DB_PATH = os.environ.get("LAUNCHY_AUTH_DB", "/var/lib/launchy-auth/accounts.db")
 ADMIN_TOKEN = os.environ.get("LAUNCHY_AUTH_ADMIN_TOKEN", "")
+# Vérification des pseudos premium auprès de Mojang. Désactivable avec LAUNCHY_AUTH_PREMIUM_CHECK=off.
+PREMIUM_CHECK = os.environ.get("LAUNCHY_AUTH_PREMIUM_CHECK", "on").lower() != "off"
 SMTP_HOST = os.environ.get("LAUNCHY_SMTP_HOST", "")
 SMTP_PORT = int(os.environ.get("LAUNCHY_SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("LAUNCHY_SMTP_USER", "")
@@ -379,11 +381,12 @@ class Handler(BaseHTTPRequestHandler):
                                   (username.lower(),)).fetchone()
         if username.lower() in RESERVED_NAMES and approved is None:
             return self._json(403, {"error": "reserved_name"})
-        try:
-            if is_premium_name(username):
-                return self._json(403, {"error": "premium_name"})
-        except Exception:
-            return self._json(503, {"error": "premium_check_unavailable"})
+        if PREMIUM_CHECK:
+            try:
+                if is_premium_name(username):
+                    return self._json(403, {"error": "premium_name"})
+            except Exception:
+                return self._json(503, {"error": "premium_check_unavailable"})
 
         salt = os.urandom(16)
         account_uuid = offline_uuid(username)
